@@ -65,9 +65,9 @@ def save_raw_data(data):
     output_file = raw_directory / "dolar_observado.csv"
 
     data.to_csv(
-    output_file,
-    index=True,
-    index_label="fecha"
+        output_file,
+        index=True,
+        index_label="fecha"
     )
 
     print(f"Datos guardados en: {output_file}")
