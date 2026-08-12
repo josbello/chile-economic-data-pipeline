@@ -5,25 +5,26 @@ import pandas as pd
 import psycopg
 from dotenv import load_dotenv
 
+from config import INDICATORS
+
+
+# ============================================================
+# CONFIGURACIÓN
+# ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-PROCESSED_FILE = (
-    BASE_DIR
-    / "data"
-    / "processed"
-    / "dolar_observado_clean.csv"
-)
+PROCESSED_DIR = BASE_DIR / "data" / "processed"
 
 load_dotenv(BASE_DIR / ".env")
 
 
-SERIES_ID = "F073.TCO.PRE.Z.D"
-INDICATOR_NAME = "Dólar observado"
-FREQUENCY = "DAILY"
-
-
 def get_connection():
+    """
+    Crea una conexión con PostgreSQL utilizando
+    las variables almacenadas en .env.
+    """
+
     required_variables = [
         "DB_HOST",
         "DB_PORT",
@@ -52,19 +53,34 @@ def get_connection():
     )
 
 
-def load_processed_data():
-    if not PROCESSED_FILE.exists():
+def load_processed_file(indicator_key):
+    """
+    Carga el CSV procesado correspondiente
+    a un indicador.
+    """
+
+    processed_file = (
+        PROCESSED_DIR
+        / f"{indicator_key}.csv"
+    )
+
+    if not processed_file.exists():
         raise FileNotFoundError(
-            f"No se encontró el archivo procesado: {PROCESSED_FILE}"
+            f"No se encontró el archivo procesado: {processed_file}"
         )
 
     return pd.read_csv(
-        PROCESSED_FILE,
+        processed_file,
         parse_dates=["fecha"]
     )
 
 
 def insert_data(connection, data):
+    """
+    Inserta o actualiza observaciones económicas
+    dentro de PostgreSQL.
+    """
+
     query = """
         INSERT INTO economic_indicators (
             series_id,
@@ -95,13 +111,14 @@ def insert_data(connection, data):
     records = []
 
     for _, row in data.iterrows():
+
         records.append(
             (
-                SERIES_ID,
-                INDICATOR_NAME,
-                FREQUENCY,
+                row["series_id"],
+                row["indicator_name"],
+                row["frequency"],
                 row["fecha"].date(),
-                float(row["dolar_observado"]),
+                float(row["valor"]),
                 int(row["anio"]),
                 int(row["mes"]),
                 int(row["dia"]),
@@ -110,30 +127,70 @@ def insert_data(connection, data):
         )
 
     with connection.cursor() as cursor:
-        cursor.executemany(query, records)
+        cursor.executemany(
+            query,
+            records
+        )
 
     connection.commit()
 
-    print(f"{len(records)} registros cargados correctamente.")
+    return len(records)
 
 
 def main():
-    print("=== CARGA DE DATOS A POSTGRESQL ===\n")
 
-    data = load_processed_data()
-
-    print(f"Registros a cargar: {len(data)}")
+    print(
+        "=== CARGA DE INDICADORES A POSTGRESQL ==="
+    )
 
     connection = get_connection()
 
-    try:
-        print("Conexión con PostgreSQL establecida.")
+    total_loaded = 0
 
-        insert_data(connection, data)
+    try:
+
+        print(
+            "Conexión con PostgreSQL establecida correctamente."
+        )
+
+        for indicator_key, indicator_config in INDICATORS.items():
+
+            print(
+                f"\nCargando: {indicator_config['name']}"
+            )
+
+            data = load_processed_file(
+                indicator_key
+            )
+
+            records_loaded = insert_data(
+                connection,
+                data
+            )
+
+            total_loaded += records_loaded
+
+            print(
+                f"Registros procesados para carga: "
+                f"{records_loaded}"
+            )
+
+        print(
+            f"\nTotal de registros procesados: "
+            f"{total_loaded}"
+        )
 
     finally:
+
         connection.close()
-        print("Conexión con PostgreSQL cerrada.")
+
+        print(
+            "Conexión con PostgreSQL cerrada."
+        )
+
+    print(
+        "\n=== CARGA COMPLETADA ==="
+    )
 
 
 if __name__ == "__main__":
