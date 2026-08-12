@@ -4,21 +4,22 @@ from pathlib import Path
 import bcchapi
 from dotenv import load_dotenv
 
+from config import INDICATORS
+
 
 # Ruta raíz del proyecto
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Carpeta donde se guardarán los datos RAW
+RAW_DIR = BASE_DIR / "data" / "raw"
 
 # Cargar variables de entorno
 load_dotenv(BASE_DIR / ".env")
 
 
-# Código oficial de la serie diaria del dólar observado
-DOLLAR_SERIES_ID = "F073.TCO.PRE.Z.D"
-
-
 def get_client():
     """
-    Crea el cliente para conectarse a la API BDE
+    Crea un cliente para conectarse a la API BDE
     del Banco Central de Chile.
     """
 
@@ -27,42 +28,53 @@ def get_client():
 
     if not user or not password:
         raise RuntimeError(
-            "No se encontraron las credenciales del Banco Central."
+            "No se encontraron las credenciales BCCH_USER y BCCH_PASSWORD."
         )
 
     return bcchapi.Siete(user, password)
 
 
-def extract_dollar_data(client):
+def extract_indicator(client, indicator_key, indicator_config):
     """
-    Extrae los datos históricos del dólar observado
-    desde el año 2020.
+    Extrae una serie económica desde la API BDE.
     """
 
-    print("Extrayendo datos del dólar observado...")
+    series_id = indicator_config["series_id"]
+    start_date = indicator_config["start_date"]
+    indicator_name = indicator_config["name"]
+
+    print(f"\nExtrayendo: {indicator_name}")
+    print(f"Serie: {series_id}")
+    print(f"Desde: {start_date}")
 
     data = client.cuadro(
-        series=[DOLLAR_SERIES_ID],
-        desde="2020-01-01",
-        nombres=["dolar_observado"]
+        series=[series_id],
+        desde=start_date,
+        nombres=[indicator_key]
     )
+
+    if data.empty:
+        raise RuntimeError(
+            f"No se obtuvieron datos para {indicator_name}."
+        )
+
+    print(f"Registros obtenidos: {len(data)}")
 
     return data
 
 
-def save_raw_data(data):
+def save_raw_data(data, indicator_key):
     """
-    Guarda los datos extraídos sin transformar.
+    Guarda los datos obtenidos desde la API
+    sin aplicar transformaciones.
     """
 
-    raw_directory = BASE_DIR / "data" / "raw"
-
-    raw_directory.mkdir(
+    RAW_DIR.mkdir(
         parents=True,
         exist_ok=True
     )
 
-    output_file = raw_directory / "dolar_observado.csv"
+    output_file = RAW_DIR / f"{indicator_key}.csv"
 
     data.to_csv(
         output_file,
@@ -70,27 +82,30 @@ def save_raw_data(data):
         index_label="fecha"
     )
 
-    print(f"Datos guardados en: {output_file}")
+    print(f"Archivo guardado en: {output_file}")
 
 
 def main():
-    print("Conectando con la API BDE...")
+    print("=== EXTRACCIÓN DE INDICADORES ECONÓMICOS ===")
 
     client = get_client()
 
-    print("Conexión configurada correctamente.")
+    print("Conexión con la API BDE configurada correctamente.")
 
-    dollar_data = extract_dollar_data(client)
+    for indicator_key, indicator_config in INDICATORS.items():
 
-    print("\nPrimeras observaciones:")
-    print(dollar_data.head())
+        data = extract_indicator(
+            client,
+            indicator_key,
+            indicator_config
+        )
 
-    print("\nÚltimas observaciones:")
-    print(dollar_data.tail())
+        save_raw_data(
+            data,
+            indicator_key
+        )
 
-    print(f"\nTotal de registros: {len(dollar_data)}")
-
-    save_raw_data(dollar_data)
+    print("\n=== EXTRACCIÓN COMPLETADA ===")
 
 
 if __name__ == "__main__":

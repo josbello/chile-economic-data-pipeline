@@ -2,130 +2,201 @@ from pathlib import Path
 
 import pandas as pd
 
+from config import INDICATORS
 
-# Ruta raíz del proyecto
+
+# ============================================================
+# RUTAS DEL PROYECTO
+# ============================================================
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Archivos de entrada y salida
-RAW_FILE = BASE_DIR / "data" / "raw" / "dolar_observado.csv"
-
+RAW_DIR = BASE_DIR / "data" / "raw"
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
-PROCESSED_FILE = PROCESSED_DIR / "dolar_observado_clean.csv"
 
 
-def load_raw_data():
+def load_raw_data(indicator_key):
     """
-    Carga el archivo RAW generado en la fase de extracción.
+    Carga el archivo RAW correspondiente a un indicador.
     """
 
-    if not RAW_FILE.exists():
+    raw_file = RAW_DIR / f"{indicator_key}.csv"
+
+    if not raw_file.exists():
         raise FileNotFoundError(
-            f"No se encontró el archivo RAW: {RAW_FILE}"
+            f"No se encontró el archivo RAW: {raw_file}"
         )
 
-    return pd.read_csv(RAW_FILE)
+    return pd.read_csv(raw_file)
 
 
-def transform_data(data):
+def transform_indicator(data, indicator_key, indicator_config):
     """
-    Limpia, valida y transforma los datos
-    correspondientes al dólar observado.
+    Limpia, valida y normaliza un indicador económico.
     """
 
-    # Trabajamos sobre una copia para no modificar
-    # accidentalmente el DataFrame original
     df = data.copy()
 
-    expected_columns = {"fecha", "dolar_observado"}
+    expected_columns = {
+        "fecha",
+        indicator_key,
+    }
 
     if not expected_columns.issubset(df.columns):
         raise ValueError(
-            f"El archivo debe contener las columnas: {expected_columns}"
+            f"El archivo de {indicator_key} debe contener "
+            f"las columnas: {expected_columns}"
         )
+
+    print(f"\nTransformando: {indicator_config['name']}")
+    print("-" * 60)
 
     print(f"Registros RAW: {len(df)}")
 
-    # -------------------------------------------------
+    # ========================================================
     # 1. CONVERSIÓN DE TIPOS
-    # -------------------------------------------------
+    # ========================================================
 
     df["fecha"] = pd.to_datetime(
         df["fecha"],
         errors="coerce"
     )
 
-    df["dolar_observado"] = pd.to_numeric(
-        df["dolar_observado"],
+    df[indicator_key] = pd.to_numeric(
+        df[indicator_key],
         errors="coerce"
     )
 
-    # -------------------------------------------------
+    # ========================================================
     # 2. CONTROL DE CALIDAD
-    # -------------------------------------------------
+    # ========================================================
 
     invalid_dates = df["fecha"].isna().sum()
 
-    null_values = df["dolar_observado"].isna().sum()
+    null_values = df[indicator_key].isna().sum()
 
     duplicates = df.duplicated(
         subset=["fecha"]
     ).sum()
 
+    today = pd.Timestamp.today().normalize()
+
+    future_dates = (
+        df["fecha"] > today
+    ).sum()
+
     print(f"Fechas inválidas: {invalid_dates}")
     print(f"Valores nulos: {null_values}")
     print(f"Fechas duplicadas: {duplicates}")
+    print(f"Registros con fecha futura: {future_dates}")
 
-    # -------------------------------------------------
+    # ========================================================
     # 3. LIMPIEZA
-    # -------------------------------------------------
+    # ========================================================
 
-    # Eliminar registros sin una fecha válida
+    # Eliminar fechas inválidas
     df = df.dropna(
         subset=["fecha"]
     )
 
-    # Eliminar días sin valor observado
+    # Eliminar registros sin valor
     df = df.dropna(
-        subset=["dolar_observado"]
+        subset=[indicator_key]
     )
 
-    # Eliminar posibles fechas duplicadas
+    # Eliminar duplicados
     df = df.drop_duplicates(
         subset=["fecha"],
         keep="last"
     )
 
-    # El dólar observado debe ser un valor positivo
+    # Los archivos RAW conservan posibles datos futuros,
+    # pero el dataset procesado solo considera datos hasta hoy.
     df = df[
-        df["dolar_observado"] > 0
+        df["fecha"] <= today
     ]
 
-    # -------------------------------------------------
-    # 4. ORDENAMIENTO
-    # -------------------------------------------------
+    # ========================================================
+    # 4. VALIDACIÓN DEL VALOR
+    # ========================================================
 
-    df = df.sort_values(
-        by="fecha"
+    min_value = indicator_config.get("min_value")
+
+    if min_value is not None:
+
+        invalid_values = (
+            df[indicator_key] < min_value
+        ).sum()
+
+        print(
+            f"Valores menores a {min_value}: "
+            f"{invalid_values}"
+        )
+
+        df = df[
+            df[indicator_key] >= min_value
+        ]
+
+    # ========================================================
+    # 5. NORMALIZACIÓN
+    # ========================================================
+
+    # Todos los indicadores utilizarán la misma columna
+    # para representar su valor.
+    df = df.rename(
+        columns={
+            indicator_key: "valor"
+        }
     )
-    
-    # Reiniciar índice después de la limpieza
-    df = df.reset_index(drop=True)
 
-    # -------------------------------------------------
-    # 5. NUEVAS VARIABLES PARA ANÁLISIS
-    # -------------------------------------------------
+    # Agregar metadatos
+    df["series_id"] = indicator_config["series_id"]
+    df["indicator_name"] = indicator_config["name"]
+    df["frequency"] = indicator_config["frequency"]
+
+    # ========================================================
+    # 6. VARIABLES TEMPORALES
+    # ========================================================
 
     df["anio"] = df["fecha"].dt.year
     df["mes"] = df["fecha"].dt.month
     df["dia"] = df["fecha"].dt.day
     df["trimestre"] = df["fecha"].dt.quarter
 
+    # Orden cronológico
+    df = df.sort_values(
+        by="fecha"
+    )
+
+    # Reiniciar índice
+    df = df.reset_index(
+        drop=True
+    )
+
+    # ========================================================
+    # 7. ORDEN DE COLUMNAS
+    # ========================================================
+
+    df = df[
+        [
+            "series_id",
+            "indicator_name",
+            "frequency",
+            "fecha",
+            "valor",
+            "anio",
+            "mes",
+            "dia",
+            "trimestre",
+        ]
+    ]
+
     return df
 
 
-def save_processed_data(data):
+def save_processed_data(data, indicator_key):
     """
-    Guarda el DataFrame limpio en la carpeta processed.
+    Guarda un indicador transformado.
     """
 
     PROCESSED_DIR.mkdir(
@@ -133,32 +204,52 @@ def save_processed_data(data):
         exist_ok=True
     )
 
+    output_file = (
+        PROCESSED_DIR
+        / f"{indicator_key}.csv"
+    )
+
     data.to_csv(
-        PROCESSED_FILE,
+        output_file,
         index=False
     )
 
     print(
-        f"\nDatos procesados guardados en:\n{PROCESSED_FILE}"
+        f"Registros procesados: {len(data)}"
+    )
+
+    print(
+        f"Archivo procesado guardado en: "
+        f"{output_file}"
     )
 
 
 def main():
-    print("=== TRANSFORMACIÓN DE DATOS ===\n")
 
-    raw_data = load_raw_data()
+    print(
+        "=== TRANSFORMACIÓN DE INDICADORES ECONÓMICOS ==="
+    )
 
-    clean_data = transform_data(raw_data)
+    for indicator_key, indicator_config in INDICATORS.items():
 
-    print(f"\nRegistros procesados: {len(clean_data)}")
+        raw_data = load_raw_data(
+            indicator_key
+        )
 
-    print("\nPrimeros registros:")
-    print(clean_data.head())
+        clean_data = transform_indicator(
+            raw_data,
+            indicator_key,
+            indicator_config
+        )
 
-    print("\nÚltimos registros:")
-    print(clean_data.tail())
+        save_processed_data(
+            clean_data,
+            indicator_key
+        )
 
-    save_processed_data(clean_data)
+    print(
+        "\n=== TRANSFORMACIÓN COMPLETADA ==="
+    )
 
 
 if __name__ == "__main__":
