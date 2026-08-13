@@ -230,6 +230,8 @@ def main():
         "=== TRANSFORMACIÓN DE INDICADORES ECONÓMICOS ==="
     )
 
+    total_transformed = 0
+
     for indicator_key, indicator_config in INDICATORS.items():
 
         raw_data = load_raw_data(
@@ -247,9 +249,13 @@ def main():
             indicator_key
         )
 
+        total_transformed += len(clean_data)
+
     print(
         "\n=== TRANSFORMACIÓN COMPLETADA ==="
     )
+
+    return total_transformed
 
 
 if __name__ == "__main__":

@@ -92,6 +92,8 @@ def main():
 
     print("Conexión con la API BDE configurada correctamente.")
 
+    total_extracted = 0
+
     for indicator_key, indicator_config in INDICATORS.items():
 
         data = extract_indicator(
@@ -105,7 +107,11 @@ def main():
             indicator_key
         )
 
+        total_extracted += len(data)
+
     print("\n=== EXTRACCIÓN COMPLETADA ===")
+
+    return total_extracted
 
 
 if __name__ == "__main__":

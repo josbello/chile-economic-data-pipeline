@@ -176,9 +176,9 @@ def main():
             )
 
         print(
-            f"\nTotal de registros procesados: "
-            f"{total_loaded}"
+            "\n=== CARGA COMPLETADA ==="
         )
+        return total_loaded
 
     finally:
 
