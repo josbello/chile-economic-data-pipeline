@@ -10,4 +10,4 @@ COPY src ./src
 
 RUN mkdir -p data/raw data/processed
 
-CMD ["sh", "-c", "python src/extract.py && python src/transform.py && python src/load.py"]
+CMD ["python", "src/pipeline.py"]

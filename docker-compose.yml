@@ -40,6 +40,9 @@ services:
     env_file:
       - .env
 
+    volumes:
+    - ./data:/app/data
+
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
