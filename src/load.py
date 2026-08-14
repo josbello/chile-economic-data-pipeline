@@ -188,9 +188,6 @@ def main():
             "Conexión con PostgreSQL cerrada."
         )
 
-    print(
-        "\n=== CARGA COMPLETADA ==="
-    )
 
 
 if __name__ == "__main__":

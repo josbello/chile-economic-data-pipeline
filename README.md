@@ -21,39 +21,35 @@ Incluye valores actuales, evolución mensual y un filtro interactivo de período
 
 ## Arquitectura
 
-```text
-                    Banco Central de Chile
-                             API
-                              │
-                              ▼
-                     ┌─────────────────┐
-                     │   Python ETL    │
-                     │   pipeline.py   │
-                     └────────┬────────┘
-                              │
-             ┌────────────────┼────────────────┐
-             ▼                ▼                ▼
-          Extract          Transform        Validate
-             │                │                │
-             ▼                ▼                ▼
-         RAW Data      Processed Data    Data Quality
-                              │
-                              ▼
-                            Load
-                              │
-                              ▼
-                    ┌─────────────────┐
-                    │   PostgreSQL    │
-                    │     Docker      │
-                    └────────┬────────┘
-                             │
-               ┌─────────────┼─────────────┐
-               ▼             ▼             ▼
-          SQL Analytics     DBeaver      Tableau
-               │
-               ▼
-             Views
-```
+        Banco Central de Chile API
+                │
+                ▼
+            Extract
+                │
+                ▼
+            data/raw/
+                │
+                ▼
+            Transform
+                │
+                ▼
+        data/processed/
+                │
+                ▼
+            Validate
+                │
+                ▼
+                Load
+                │
+                ▼
+            PostgreSQL
+                │
+            ┌────┴────┐
+            ▼         ▼
+        SQL Views   DBeaver
+            │
+            ▼
+        Tableau
 
 ---
 
