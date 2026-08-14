@@ -219,3 +219,13 @@ __marimo__/
 
 logs/*.log
 !logs/.gitkeep
+
+# Generated datasets
+data/raw/*
+data/processed/*
+
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# macOS
+.DS_Store
