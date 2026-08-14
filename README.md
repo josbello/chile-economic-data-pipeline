@@ -436,7 +436,7 @@ localhost:5433
 ### 1. Clonar el repositorio
 
 ```bash
-git clone <URL_DEL_REPOSITORIO>
+git clone https://github.com/josbello/chile-economic-data-pipeline.git
 cd chile-economic-data-pipeline
 ```
 
